@@ -1,9 +1,16 @@
 require("dotenv").config();
 
-const express = require("express");
-const app = express();
 const axios = require("axios");
 const admin = require("firebase-admin");
+const express = require("express");
+
+const app = express();
+app.use(express.json());
+
+// ================= ROOT ROUTE (FIX 404) =================
+app.get("/", (req, res) => {
+  res.send("🚀 Server is running");
+});
 
 // ================= FIREBASE =================
 admin.initializeApp({
@@ -17,7 +24,7 @@ const db = admin.database();
 const ORS_KEY = process.env.ORS_API_KEY;
 
 // =====================================================
-// 🔥 VOICE PROCESS FUNCTION (SAFE VERSION)
+// 🎤 VOICE FUNCTION
 // =====================================================
 async function processVoice() {
   try {
@@ -29,8 +36,7 @@ async function processVoice() {
 
     console.log("🎤 Voice request received");
 
-    // TEMP (no file crash)
-    const text = "test command";
+    const text = "test command"; // temporary
 
     await ref.update({
       status: "done",
@@ -51,20 +57,18 @@ async function processVoice() {
 }
 
 // =====================================================
-// 🔥 NAVIGATION FUNCTION
+// 🧭 NAVIGATION FUNCTION
 // =====================================================
 async function updateNavigation() {
   try {
     const snap = await db.ref("navigation_device").once("value");
     const data = snap.val();
 
-    // Safety check
     if (!data || !data.location || !data.destination) {
       console.log("No data yet...");
       return;
     }
 
-    // GPS validation
     if (
       data.location.lat === 0 ||
       data.location.lon === 0 ||
@@ -98,15 +102,12 @@ async function updateNavigation() {
 
     let instruction = step.instruction.toLowerCase();
 
-    // Direction normalize
     if (instruction.includes("left")) instruction = "LEFT";
     else if (instruction.includes("right")) instruction = "RIGHT";
     else instruction = "STRAIGHT";
 
-    // ================= DISTANCE ROUNDING =================
     let distance = Math.round(step.distance);
 
-    // Convert to fixed values
     if (distance <= 10) distance = 10;
     else if (distance <= 20) distance = 20;
     else if (distance <= 50) distance = 50;
@@ -128,14 +129,7 @@ async function updateNavigation() {
 }
 
 // =====================================================
-// 🌐 ROUTE (FIX FOR 404)
-// =====================================================
-app.get("/", (req, res) => {
-  res.send("🚀 Server is running");
-});
-
-// =====================================================
-// 🚀 SERVER START
+// 🚀 SERVER START (ONLY ONCE)
 // =====================================================
 const PORT = process.env.PORT || 3000;
 
@@ -144,11 +138,7 @@ app.listen(PORT, () => {
 });
 
 // =====================================================
-// 🔁 MAIN LOOP
+// 🔁 LOOPS
 // =====================================================
-
-// Voice check every 3 sec
 setInterval(processVoice, 3000);
-
-// Navigation update every 5 sec
 setInterval(updateNavigation, 5000);
