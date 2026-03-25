@@ -7,10 +7,11 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 
 // ---------------- FIREBASE ----------------
-const serviceAccount = require("./serviceAccountKey.json");
 
+
+// ---------------- FIREBASE ----------------
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_KEY)),
   databaseURL: process.env.DATABASE_URL
 });
 
@@ -90,7 +91,7 @@ async function processVoice() {
 
     console.log("🎤 Voice request received");
 
-    const text = await speechToText();
+    const text = "test command";   // TEMP FIX
 
     if (!text) {
       await ref.update({
@@ -126,12 +127,20 @@ async function updateNavigation() {
     const snap = await db.ref("navigation_device").once("value");
     const data = snap.val();
 
+    if (!data || !data.location || !data.destination) {
+      console.log("No data yet...");
+      return;
+    }
+
     if (
       data.location.lat === 0 ||
       data.location.lon === 0 ||
       data.destination.lat === 0 ||
       data.destination.lon === 0
     ) {
+      console.log("Waiting for valid GPS...");
+      return;
+    } {
       console.log("Waiting for valid GPS...");
       return;
     }
