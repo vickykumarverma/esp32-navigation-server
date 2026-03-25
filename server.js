@@ -4,12 +4,8 @@ const express = require("express");
 const app = express();
 const axios = require("axios");
 const admin = require("firebase-admin");
-const fs = require("fs");
 
-// ---------------- FIREBASE ----------------
-
-
-// ---------------- FIREBASE ----------------
+// ================= FIREBASE =================
 admin.initializeApp({
   credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_KEY)),
   databaseURL: process.env.DATABASE_URL
@@ -17,91 +13,24 @@ admin.initializeApp({
 
 const db = admin.database();
 
-// ---------------- API KEYS ----------------
+// ================= API KEYS =================
 const ORS_KEY = process.env.ORS_API_KEY;
-const ASSEMBLY_API_KEY = process.env.ASSEMBLY_API_KEY;
 
 // =====================================================
-// 🔥 ASSEMBLY AI STT FUNCTION
-// =====================================================
-async function speechToText() {
-  try {
-    const audioData = fs.readFileSync("input.wav");
-
-    // Upload
-    const uploadRes = await axios.post(
-      "https://api.assemblyai.com/v2/upload",
-      audioData,
-      {
-        headers: {
-          authorization: ASSEMBLY_API_KEY,
-          "transfer-encoding": "chunked"
-        }
-      }
-    );
-
-    const audio_url = uploadRes.data.upload_url;
-
-    // Request transcription
-    const transcriptRes = await axios.post(
-      "https://api.assemblyai.com/v2/transcript",
-      { audio_url },
-      {
-        headers: { authorization: ASSEMBLY_API_KEY }
-      }
-    );
-
-    const id = transcriptRes.data.id;
-
-    // Poll result
-    while (true) {
-      const res = await axios.get(
-        `https://api.assemblyai.com/v2/transcript/${id}`,
-        { headers: { authorization: ASSEMBLY_API_KEY } }
-      );
-
-      if (res.data.status === "completed") {
-        return res.data.text;
-      }
-
-      if (res.data.status === "failed") {
-        throw new Error("STT failed");
-      }
-
-      await new Promise(r => setTimeout(r, 2000));
-    }
-
-  } catch (err) {
-    console.log("❌ STT ERROR:", err.message);
-    return null;
-  }
-}
-
-// =====================================================
-// 🔥 VOICE PROCESS FUNCTION
+// 🔥 VOICE PROCESS FUNCTION (SAFE VERSION)
 // =====================================================
 async function processVoice() {
   try {
     const ref = db.ref("voice");
     const snap = await ref.once("value");
-
     const data = snap.val();
 
     if (!data || !data.request) return;
 
     console.log("🎤 Voice request received");
 
-    const text = "test command";   // TEMP FIX
-
-    if (!text) {
-      await ref.update({
-        status: "failed",
-        request: false
-      });
-      return;
-    }
-
-    console.log("🗣️ Result:", text);
+    // TEMP (no file crash)
+    const text = "test command";
 
     await ref.update({
       status: "done",
@@ -109,8 +38,10 @@ async function processVoice() {
       request: false
     });
 
+    console.log("🗣️ Voice processed:", text);
+
   } catch (err) {
-    console.log("❌ Voice Processing Error:", err.message);
+    console.log("❌ Voice Error:", err.message);
 
     await db.ref("voice").update({
       status: "failed",
@@ -120,27 +51,26 @@ async function processVoice() {
 }
 
 // =====================================================
-// 🔥 ORS NAVIGATION FUNCTION
+// 🔥 NAVIGATION FUNCTION
 // =====================================================
 async function updateNavigation() {
   try {
     const snap = await db.ref("navigation_device").once("value");
     const data = snap.val();
 
+    // Safety check
     if (!data || !data.location || !data.destination) {
       console.log("No data yet...");
       return;
     }
 
+    // GPS validation
     if (
       data.location.lat === 0 ||
       data.location.lon === 0 ||
       data.destination.lat === 0 ||
       data.destination.lon === 0
     ) {
-      console.log("Waiting for valid GPS...");
-      return;
-    } {
       console.log("Waiting for valid GPS...");
       return;
     }
@@ -168,12 +98,22 @@ async function updateNavigation() {
 
     let instruction = step.instruction.toLowerCase();
 
-    // 🔥 Normalize
+    // Direction normalize
     if (instruction.includes("left")) instruction = "LEFT";
     else if (instruction.includes("right")) instruction = "RIGHT";
     else instruction = "STRAIGHT";
 
-    const distance = Math.round(step.distance);
+    // ================= DISTANCE ROUNDING =================
+    let distance = Math.round(step.distance);
+
+    // Convert to fixed values
+    if (distance <= 10) distance = 10;
+    else if (distance <= 20) distance = 20;
+    else if (distance <= 50) distance = 50;
+    else if (distance <= 100) distance = 100;
+    else if (distance <= 200) distance = 200;
+    else if (distance <= 500) distance = 500;
+    else distance = 1000;
 
     console.log("➡", instruction, distance);
 
@@ -183,9 +123,25 @@ async function updateNavigation() {
     });
 
   } catch (err) {
-    console.log("ORS ERROR:", err.message);
+    console.log("❌ ORS ERROR:", err.message);
   }
 }
+
+// =====================================================
+// 🌐 ROUTE (FIX FOR 404)
+// =====================================================
+app.get("/", (req, res) => {
+  res.send("🚀 Server is running");
+});
+
+// =====================================================
+// 🚀 SERVER START
+// =====================================================
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
 
 // =====================================================
 // 🔁 MAIN LOOP
@@ -196,16 +152,3 @@ setInterval(processVoice, 3000);
 
 // Navigation update every 5 sec
 setInterval(updateNavigation, 5000);
-
-// =====================================================
-// 🌐 EXPRESS SERVER (ADD HERE)
-// =====================================================
-app.get("/", (req, res) => {
-  res.send("🚀 Server is running");
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
