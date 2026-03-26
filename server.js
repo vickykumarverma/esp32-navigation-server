@@ -37,7 +37,7 @@ const ref = db.ref("voice");
 const snap = await ref.once("value");
 const data = snap.val();
 
-```
+
 if (!data || !data.request) return;
 
 console.log("🎤 Voice request received");
@@ -51,17 +51,17 @@ await ref.update({
 });
 
 console.log("🗣️ Voice processed:", text);
-```
+
 
 } catch (err) {
 console.log("❌ Voice Error:", err.message);
 
-```
+
 await db.ref("voice").update({
   status: "failed",
   request: false
 });
-```
+
 
 }
 }
@@ -74,7 +74,7 @@ try {
 const snap = await db.ref("navigation_device").once("value");
 const data = snap.val();
 
-```
+
 if (!data || !data.location || !data.destination) {
   console.log("No data yet...");
   return;
@@ -183,7 +183,7 @@ await db.ref("navigation_device").update({
   instruction,
   distance
 });
-```
+
 
 } catch (err) {
 if (err.response?.status === 403) {
@@ -191,9 +191,9 @@ console.log("🚫 ORS quota finished → stopping calls");
 return;
 }
 
-```
+
 console.log("❌ ORS ERROR:", err.response?.data || err.message);
-```
+
 
 }
 }
